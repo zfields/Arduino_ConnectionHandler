@@ -28,6 +28,10 @@
 
 #include <Arduino.h>
 
+#ifdef USE_NOTECARD
+  #include <Notecard.h>
+#else
+
 #ifdef ARDUINO_SAMD_MKR1000
   #include <WiFi101.h>
   #include <WiFiUdp.h>
@@ -179,6 +183,8 @@
   #define NETWORK_HARDWARE_ERROR
 #endif
 
+#endif // USE_NOTECARD
+
 /******************************************************************************
    TYPEDEFS
  ******************************************************************************/
@@ -206,7 +212,8 @@ enum class NetworkAdapter {
   GSM,
   LORA,
   CATM1,
-  CELL
+  CELL,
+  NOTECARD
 };
 
 typedef void (*OnNetworkEventCallback)();
@@ -239,11 +246,13 @@ class ConnectionHandler {
 
     ConnectionHandler(bool const keep_alive, NetworkAdapter interface);
 
-
     NetworkConnectionState check();
 
     #if !defined(BOARD_HAS_LORA)
       virtual unsigned long getTime() = 0;
+    #endif
+
+    #if !defined(BOARD_HAS_LORA) && !defined(USE_NOTECARD)
       virtual Client &getClient() = 0;
       virtual UDP &getUDP() = 0;
     #else
@@ -279,15 +288,18 @@ class ConnectionHandler {
     virtual NetworkConnectionState update_handleDisconnecting() = 0;
     virtual NetworkConnectionState update_handleDisconnected () = 0;
 
-
   private:
 
     unsigned long _lastConnectionTickTime;
     NetworkConnectionState _current_net_connection_state;
-    OnNetworkEventCallback  _on_connect_event_callback = NULL,
-                            _on_disconnect_event_callback = NULL,
-                            _on_error_event_callback = NULL;
+    OnNetworkEventCallback _on_connect_event_callback = NULL,
+                           _on_disconnect_event_callback = NULL,
+                           _on_error_event_callback = NULL;
 };
+
+#if defined(USE_NOTECARD)
+  #include "Arduino_NotecardConnectionHandler.h"
+#endif
 
 #if defined(BOARD_HAS_WIFI)
   #include "Arduino_WiFiConnectionHandler.h"
