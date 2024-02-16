@@ -38,6 +38,16 @@
 #define NOTEFILE_SSL_OUTBOUND NOTEFILE_BASE_NAME ".qos"
 
 /******************************************************************************
+   STLINK DEBUG OUTPUT
+ ******************************************************************************/
+
+// Provide Notehub debug output via STLINK serial port when available
+#if defined(ARDUINO_SWAN_R5)
+  #define STLINK_DEBUG
+  HardwareSerial stlinkSerial(PIN_VCP_RX, PIN_VCP_TX);
+#endif
+
+/******************************************************************************
    TYPEDEF
  ******************************************************************************/
 
@@ -186,6 +196,14 @@ bool NotecardConnectionHandler::available()
 NetworkConnectionState NotecardConnectionHandler::update_handleInit()
 {
   NetworkConnectionState result;
+
+#if defined(STLINK_DEBUG)
+  // Output Notecard logs to the STLINK serial port
+  stlinkSerial.begin(115200);
+  const size_t usb_timeout_ms = 3000;
+  for (const size_t start_ms = millis(); !stlinkSerial && (millis() - start_ms) < usb_timeout_ms;);
+  _notecard.setDebugOutputStream(stlinkSerial);
+#endif
 
   // Initialize the Notecard based on the configuration
   if (_serial) {
