@@ -17,3 +17,5 @@ const char SECRET_IP[]       = "IP ADDRESS";
 const char SECRET_DNS[]      = "DNS ADDRESS";
 const char SECRET_GATEWAY[]  = "GATEWAY ADDRESS";
 const char SECRET_NETMASK[]  = "NETWORK MASK";
+
+const char SECRET_NOTEHUB_PROJECT[] = "PROJECT UID";
