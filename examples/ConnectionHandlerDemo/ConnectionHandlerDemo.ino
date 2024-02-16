@@ -31,7 +31,9 @@
 
 #include <Arduino_ConnectionHandler.h>
 
-#if defined(BOARD_HAS_ETHERNET)
+#if defined(USE_NOTECARD)
+NotecardConnectionHandler conMan(SECRET_NOTEHUB_PROJECT);
+#elif defined(BOARD_HAS_ETHERNET)
 EthernetConnectionHandler conMan(SECRET_IP, SECRET_DNS, SECRET_GATEWAY, SECRET_NETMASK);
 #elif defined(BOARD_HAS_WIFI)
 WiFiConnectionHandler conMan(SECRET_SSID, SECRET_PASS);

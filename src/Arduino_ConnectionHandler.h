@@ -28,6 +28,10 @@
 
 #include <Arduino.h>
 
+#ifdef USE_NOTECARD
+  #include <Notecard.h>
+#else
+
 #ifdef ARDUINO_SAMD_MKR1000
   #include <WiFi101.h>
   #include <WiFiUdp.h>
@@ -150,7 +154,7 @@
 #if defined(ARDUINO_ARCH_ESP32)
   #include <WiFi.h>
   #include <WiFiUdp.h>
-  
+
   #define BOARD_HAS_WIFI
   #define NETWORK_HARDWARE_ERROR WL_NO_SHIELD
   #define NETWORK_IDLE_STATUS WL_IDLE_STATUS
@@ -174,6 +178,8 @@
   #define BOARD_HAS_PORTENTA_CATM1_NBIOT_SHIELD
   #define NETWORK_HARDWARE_ERROR
 #endif
+
+#endif // USE_NOTECARD
 
 /******************************************************************************
    TYPEDEFS
@@ -201,7 +207,8 @@ enum class NetworkAdapter {
   NB,
   GSM,
   LORA,
-  CATM1
+  CATM1,
+  NOTECARD
 };
 
 typedef void (*OnNetworkEventCallback)();
@@ -234,7 +241,6 @@ class ConnectionHandler {
 
     ConnectionHandler(bool const keep_alive, NetworkAdapter interface);
 
-
     NetworkConnectionState check();
 
     #if defined(BOARD_HAS_WIFI) || defined(BOARD_HAS_GSM) || defined(BOARD_HAS_NB) || defined(BOARD_HAS_ETHERNET) || defined(BOARD_HAS_CATM1_NBIOT)
@@ -243,7 +249,7 @@ class ConnectionHandler {
       virtual UDP &getUDP() = 0;
     #endif
 
-    #if defined(BOARD_HAS_LORA)
+    #if defined(USE_NOTECARD) || defined(BOARD_HAS_LORA)
       virtual int write(const uint8_t *buf, size_t size) = 0;
       virtual int read() = 0;
       virtual bool available() = 0;
@@ -276,15 +282,18 @@ class ConnectionHandler {
     virtual NetworkConnectionState update_handleDisconnecting() = 0;
     virtual NetworkConnectionState update_handleDisconnected () = 0;
 
-
   private:
 
     unsigned long _lastConnectionTickTime;
     NetworkConnectionState _current_net_connection_state;
-    OnNetworkEventCallback  _on_connect_event_callback = NULL,
-                            _on_disconnect_event_callback = NULL,
-                            _on_error_event_callback = NULL;
+    OnNetworkEventCallback _on_connect_event_callback = NULL,
+                           _on_disconnect_event_callback = NULL,
+                           _on_error_event_callback = NULL;
 };
+
+#if defined(USE_NOTECARD)
+  #include "Arduino_NotecardConnectionHandler.h"
+#endif
 
 #if defined(BOARD_HAS_WIFI)
   #include "Arduino_WiFiConnectionHandler.h"
