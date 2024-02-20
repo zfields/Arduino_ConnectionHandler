@@ -130,6 +130,26 @@ NotecardConnectionHandler::NotecardConnectionHandler(
    PUBLIC MEMBER FUNCTIONS
  ******************************************************************************/
 
+unsigned long NotecardConnectionHandler::getTime(void)
+{
+  unsigned long result;
+
+  if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("card.time"))) {
+    if (NoteResponseError(rsp)) {
+      const char *err = JGetString(rsp,"err");
+      Debug.print(DBG_ERROR, F("%s\n"), err);
+      result = 0;
+    } else {
+      result = JGetInt(rsp, "time");
+    }
+    JDelete(rsp);
+  } else {
+    result = 0;
+  }
+
+  return result;
+}
+
 int NotecardConnectionHandler::write(const uint8_t * buf, size_t size)
 {
   int result;
