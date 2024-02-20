@@ -64,6 +64,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
       const String & notehub_url = "-"
     );
 
+    virtual unsigned long getTime() override;
     virtual int write(const uint8_t *buf, size_t size) override;
     virtual int read() override;
     virtual bool available() override;
