@@ -81,6 +81,7 @@ static_assert(sizeof(NotecardConnectionStatus) == sizeof(uint_fast8_t));
 
 NotecardConnectionHandler::NotecardConnectionHandler(
   const String & project_uid,
+  bool en_hw_int,
   bool keep_alive,
   uint32_t i2c_address,
   uint32_t i2c_max,
@@ -97,6 +98,7 @@ NotecardConnectionHandler::NotecardConnectionHandler(
   _uart_speed(0),
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
+  _en_hw_int(en_hw_int),
   _notecard{},
   _dev_uid{},
   _notehub_url(notehub_url),
@@ -107,6 +109,7 @@ NotecardConnectionHandler::NotecardConnectionHandler(
   const String & project_uid,
   HardwareSerial & serial,
   uint32_t speed,
+  bool en_hw_int,
   bool keep_alive,
   const String & notehub_url
 ) :
@@ -120,6 +123,7 @@ NotecardConnectionHandler::NotecardConnectionHandler(
   _uart_speed(speed),
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
+  _en_hw_int(en_hw_int),
   _notecard{},
   _dev_uid{},
   _notehub_url(notehub_url),
@@ -243,7 +247,7 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
 
   // Set the project UID
   if (NetworkConnectionState::INIT == result) {
-    if (configureConnection(_keep_alive)) {
+    if (configureConnection(true)) {
       result = NetworkConnectionState::INIT;
     } else {
       result = NetworkConnectionState::ERROR;
@@ -272,7 +276,7 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
     }
   }
 
-  // Set a template to remove payload size restrictions
+  // Set outbound template to remove payload size restrictions
   if (NetworkConnectionState::INIT == result) {
     if (J *req = _notecard.newRequest("note.template")) {
       JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
@@ -525,7 +529,9 @@ J * NotecardConnectionHandler::getNote(bool pop) /* const */{
       const char *jErr = JGetString(note, "err");
       if (NoteErrorContains(jErr, "{note-noexist}")) {
         // The Notefile is empty, thus no Note is available.
-        armInterrupt();
+        if (_en_hw_int) {
+          armInterrupt();
+        }
       } else {
         // Any other error indicates that we were unable to
         // retrieve a Note, therefore no Note is available.

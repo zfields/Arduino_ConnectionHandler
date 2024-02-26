@@ -38,8 +38,6 @@
 class NotecardConnectionHandler final : public ConnectionHandler
 {
   public:
-    static const uint32_t NOTEHUB_CONN_TIMEOUT_MS = 185000;
-
     typedef enum {
       NOTECARD_ERROR_NONE                 = 0,
       NOTECARD_ERROR_NO_DATA_AVAILABLE    = -1,
@@ -47,8 +45,11 @@ class NotecardConnectionHandler final : public ConnectionHandler
       HOST_ERROR_OUT_OF_MEMORY            = -3,
     } NotecardCommunicationError;
 
+    static const uint32_t NOTEHUB_CONN_TIMEOUT_MS = 185000;
+
     NotecardConnectionHandler(
       const String & project_uid,
+      bool en_hw_int = false,
       bool keep_alive = true,
       uint32_t i2c_address = NOTE_I2C_ADDR_DEFAULT,
       uint32_t i2c_max = NOTE_I2C_MAX_DEFAULT,
@@ -60,10 +61,12 @@ class NotecardConnectionHandler final : public ConnectionHandler
       const String & project_uid,
       HardwareSerial & serial,
       uint32_t speed = 9600,
+      bool en_hw_int = false,
       bool keep_alive = true,
       const String & notehub_url = "-"
     );
 
+    // ConnectionHandler interface
     virtual unsigned long getTime() override;
     virtual int write(const uint8_t *buf, size_t size) override;
     virtual int read() override;
@@ -79,6 +82,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
 
   private:
 
+    // Private members
     HardwareSerial * _serial;
     TwoWire * _wire;
     uint8_t * _inbound_buffer;
@@ -88,11 +92,13 @@ class NotecardConnectionHandler final : public ConnectionHandler
     uint32_t _uart_speed;
     uint32_t _inbound_buffer_index;
     uint32_t _inbound_buffer_size;
+    bool _en_hw_int;
     Notecard _notecard;
     String _dev_uid;
     String _notehub_url;
     String _project_uid;
 
+    // Private methods
     bool armInterrupt (void) /* const */;
     bool configureConnection (bool connect) /* const */;
     uint_fast8_t connected (void) /* const */;
