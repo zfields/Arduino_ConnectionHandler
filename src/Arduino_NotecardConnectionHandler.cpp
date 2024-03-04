@@ -201,12 +201,22 @@ bool NotecardConnectionHandler::available()
   // When the buffer is empty, look for a Note in the
   // NOTEFILE_SSL_INBOUND file to reload the buffer.
   if (!buffered_data) {
+    // Reset the buffer
+    free(_inbound_buffer);
+    _inbound_buffer = nullptr;
+    _inbound_buffer_index = 0;
+    _inbound_buffer_size = 0;
+
+    // Reload the buffer
     J * note = getNote(true);
     if (note) {
-      JGetBinaryFromObject(note, "payload", &_inbound_buffer, &_inbound_buffer_size);
-      _inbound_buffer_index = 0;
+      buffered_data = (JGetBinaryFromObject(note, "payload", &_inbound_buffer, &_inbound_buffer_size));
+      if (!buffered_data) {
+        Debug.print(DBG_WARNING, F("Note does not contain payload data"));
+      } else {
+        Debug.print(DBG_INFO, F("New payload buffered with size: %d"), _inbound_buffer_size);
+      }
       JDelete(note);
-      buffered_data = true;
     }
   }
 
