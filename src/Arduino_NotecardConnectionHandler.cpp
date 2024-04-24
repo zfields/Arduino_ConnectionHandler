@@ -99,8 +99,10 @@ NotecardConnectionHandler::NotecardConnectionHandler(
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
   _en_hw_int(en_hw_int),
+  _topic_type{TopicType::Invalid},
   _notecard{},
-  _dev_uid{},
+  _device_id{},
+  _notecard_uid{},
   _notehub_url(notehub_url),
   _project_uid(project_uid)
 { }
@@ -124,8 +126,10 @@ NotecardConnectionHandler::NotecardConnectionHandler(
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
   _en_hw_int(en_hw_int),
+  _topic_type{TopicType::Invalid},
   _notecard{},
-  _dev_uid{},
+  _device_id{},
+  _notecard_uid{},
   _notehub_url(notehub_url),
   _project_uid(project_uid)
 { }
@@ -140,7 +144,7 @@ unsigned long NotecardConnectionHandler::getTime(void)
 
   if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("card.time"))) {
     if (NoteResponseError(rsp)) {
-      const char *err = JGetString(rsp,"err");
+      const char *err = JGetString(rsp, "err");
       Debug.print(DBG_ERROR, F("%s\n"), err);
       result = 0;
     } else {
@@ -161,19 +165,26 @@ int NotecardConnectionHandler::write(const uint8_t * buf, size_t size)
   if (J * req = _notecard.newRequest("note.add")) {
     JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
     JAddBinaryToObject(req, "payload", buf, size);
+    // Queue the Note when `_keep_alive` is disabled
     if (_keep_alive) {
       JAddBoolToObject(req, "sync", true);
     }
-    J * rsp = _notecard.requestAndResponse(req);
-    if (NoteResponseError(rsp)) {
-      const char *err = JGetString(rsp, "err");
-      Debug.print(DBG_ERROR, F("%s\n"), err);
-      result = NotecardCommunicationError::NOTECARD_ERROR_GENERIC;
+    if (J *body = JAddObjectToObject(req, "body")) {
+      JAddIntToObject(body, "topic", static_cast<int>(_topic_type));
+      J * rsp = _notecard.requestAndResponse(req);
+      if (NoteResponseError(rsp)) {
+        const char *err = JGetString(rsp, "err");
+        Debug.print(DBG_ERROR, F("%s\n"), err);
+        result = NotecardCommunicationError::NOTECARD_ERROR_GENERIC;
+      } else {
+        result = NotecardCommunicationError::NOTECARD_ERROR_NONE;
+        Debug.print(DBG_INFO, F("Message sent correctly!"));
+      }
+      JDelete(rsp);
     } else {
-      result = NotecardCommunicationError::NOTECARD_ERROR_NONE;
-      Debug.print(DBG_INFO, F("Message sent correctly!"));
+      JFree(req);
+      result = NotecardCommunicationError::HOST_ERROR_OUT_OF_MEMORY;
     }
-    JDelete(rsp);
   } else {
     result = NotecardCommunicationError::HOST_ERROR_OUT_OF_MEMORY;
   }
@@ -197,6 +208,7 @@ int NotecardConnectionHandler::read()
 bool NotecardConnectionHandler::available()
 {
   bool buffered_data = (_inbound_buffer_index < _inbound_buffer_size);
+  bool flush_required = !buffered_data && _inbound_buffer_size;
 
   // When the buffer is empty, look for a Note in the
   // NOTEFILE_SSL_INBOUND file to reload the buffer.
@@ -207,16 +219,31 @@ bool NotecardConnectionHandler::available()
     _inbound_buffer_index = 0;
     _inbound_buffer_size = 0;
 
-    // Reload the buffer
-    J * note = getNote(true);
-    if (note) {
-      buffered_data = (JGetBinaryFromObject(note, "payload", &_inbound_buffer, &_inbound_buffer_size));
-      if (!buffered_data) {
-        Debug.print(DBG_WARNING, F("Note does not contain payload data"));
-      } else {
-        Debug.print(DBG_INFO, F("New payload buffered with size: %d"), _inbound_buffer_size);
+    // Do NOT attempt to buffer the next Note immediately after buffer
+    // exhaustion (a.k.a. flush required). Returning `false` between Notes,
+    // will break the read loop, force the CBOR buffer to be parsed, and the
+    // property containers to be updated.
+    if (!flush_required) {
+      // Reload the buffer
+      J *note = getNote(true);
+      if (note) {
+        if (J *body = JGetObject(note, "body")) {
+          _topic_type = static_cast<TopicType>(JGetInt(body, "topic"));
+          if (_topic_type == TopicType::Invalid) {
+            Debug.print(DBG_WARNING, F("Note does not contain a valid topic"));
+          } else {
+            buffered_data = JGetBinaryFromObject(note, "payload", &_inbound_buffer, &_inbound_buffer_size);
+            if (!buffered_data) {
+              Debug.print(DBG_WARNING, F("Note does not contain payload data"));
+            } else {
+              Debug.print(DBG_INFO, F("New payload buffered with size: %d"), _inbound_buffer_size);
+            }
+          }
+          JDelete(note);
+        } else {
+          _topic_type = TopicType::Invalid;
+        }
       }
-      JDelete(note);
     }
   }
 
@@ -270,17 +297,23 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
       JAddStringToObject(req, "file", NOTEFILE_SSL_INBOUND);
       JAddStringToObject(req, "format", "compact");              // Support LoRa/Satellite Notecards
       JAddIntToObject(req, "port", NOTEFILE_INBOUND_LORA_PORT);  // Support LoRa/Satellite Notecards
-      J *rsp = _notecard.requestAndResponse(req);
+      if (J *body = JAddObjectToObject(req, "body")) {
+        JAddIntToObject(body, "topic", TUINT8);
+        J *rsp = _notecard.requestAndResponse(req);
 
-      // Check the response for errors
-      if (NoteResponseError(rsp)) {
-        const char *err = JGetString(rsp,"err");
-        Debug.print(DBG_ERROR, F("%s\n"), err);
-        result = NetworkConnectionState::ERROR;
+        // Check the response for errors
+        if (NoteResponseError(rsp)) {
+          const char *err = JGetString(rsp, "err");
+          Debug.print(DBG_ERROR, F("%s\n"), err);
+          result = NetworkConnectionState::ERROR;
+        } else {
+          result = NetworkConnectionState::INIT;
+        }
+        JDelete(rsp);
       } else {
-        result = NetworkConnectionState::INIT;
+        JFree(req);
+        result = NetworkConnectionState::ERROR; // Assume the worst
       }
-      JDelete(rsp);
     } else {
       result = NetworkConnectionState::ERROR; // Assume the worst
     }
@@ -292,17 +325,23 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
       JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
       JAddStringToObject(req, "format", "compact");               // Support LoRa/Satellite Notecards
       JAddIntToObject(req, "port", NOTEFILE_OUTBOUND_LORA_PORT);  // Support LoRa/Satellite Notecards
-      J *rsp = _notecard.requestAndResponse(req);
+      if (J *body = JAddObjectToObject(req, "body")) {
+        JAddIntToObject(body, "topic", TUINT8);
+        J *rsp = _notecard.requestAndResponse(req);
 
-      // Check the response for errors
-      if (NoteResponseError(rsp)) {
-        const char *err = JGetString(rsp,"err");
-        Debug.print(DBG_ERROR, F("%s\n"), err);
-        result = NetworkConnectionState::ERROR;
+        // Check the response for errors
+        if (NoteResponseError(rsp)) {
+          const char *err = JGetString(rsp, "err");
+          Debug.print(DBG_ERROR, F("%s\n"), err);
+          result = NetworkConnectionState::ERROR;
+        } else {
+          result = NetworkConnectionState::INIT;
+        }
+        JDelete(rsp);
       } else {
-        result = NetworkConnectionState::INIT;
+        JFree(req);
+        result = NetworkConnectionState::ERROR; // Assume the worst
       }
-      JDelete(rsp);
     } else {
       result = NetworkConnectionState::ERROR; // Assume the worst
     }
@@ -310,26 +349,17 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
 
   // Get the device UID
   if (NetworkConnectionState::INIT == result) {
-    if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("hub.get"))) {
-      // Check the response for errors
-      if (NoteResponseError(rsp)) {
-        const char *err = JGetString(rsp,"err");
-        Debug.print(DBG_ERROR, F("%s\n"), err);
-        result = NetworkConnectionState::ERROR;
-      } else {
-        _dev_uid = JGetString(rsp, "device");
-        Debug.print(DBG_INFO, F("Successfully configured device with UID: %s"), _dev_uid.c_str());
-        if (_keep_alive) {
-          _conn_start_ms = ::millis();
-          Debug.print(DBG_INFO, F("Connecting to the network..."));
-          result = NetworkConnectionState::CONNECTING;
-        } else {
-          result = NetworkConnectionState::DISCONNECTED;
-        }
-      }
-      JDelete(rsp);
+    if (!updateUidCache()) {
+      result = NetworkConnectionState::ERROR;
     } else {
-      result = NetworkConnectionState::ERROR; // Assume the worst
+      Debug.print(DBG_INFO, F("Successfully configured Notecard with UID: %s"), _notecard_uid.c_str());
+      if (_keep_alive) {
+        _conn_start_ms = ::millis();
+        Debug.print(DBG_INFO, F("Connecting to the network..."));
+        result = NetworkConnectionState::CONNECTING;
+      } else {
+        result = NetworkConnectionState::DISCONNECTED;
+      }
     }
   }
 
@@ -431,7 +461,7 @@ bool NotecardConnectionHandler::armInterrupt(void) /* const */{
 
       // Check the response for errors
       if (NoteResponseError(rsp)) {
-        const char *err = JGetString(rsp,"err");
+        const char *err = JGetString(rsp, "err");
         // This error must be ignored. As of LTSv6, `rearm` is not idempotent.
         // For now, we are counting on the fact that it is highly unlikely any
         // severe errors would occur in isolation. Once the Notecard firmware
@@ -446,6 +476,7 @@ bool NotecardConnectionHandler::armInterrupt(void) /* const */{
       }
       JDelete(rsp);
     } else {
+      JFree(req);
       result = false;
     }
   } else {
@@ -472,11 +503,11 @@ bool NotecardConnectionHandler::configureConnection (bool connect) /* const */{
       JAddStringToObject(req, "vinbound", "-");
       JAddStringToObject(req, "voutbound", "-");
     }
-    J *rsp = _notecard.requestAndResponse(req);
+    J *rsp = _notecard.requestAndResponseWithRetry(req, 30);
 
     // Check the response for errors
     if (NoteResponseError(rsp)) {
-      const char *err = JGetString(rsp,"err");
+      const char *err = JGetString(rsp, "err");
       Debug.print(DBG_ERROR, F("%s\n"), err);
       result = false;
     } else {
@@ -497,8 +528,8 @@ uint_fast8_t NotecardConnectionHandler::connected(void) /* const */{
   if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("hub.status"))) {
     // Ensure the transaction doesn't return an error
     if (NoteResponseError(rsp)) {
-      const char *err = JGetString(rsp,"err");
-      Debug.print(DBG_ERROR,"%s\n",err);
+      const char *err = JGetString(rsp, "err");
+      Debug.print(DBG_ERROR, F("%s\n"),err);
       result.notecard_error = true;
     } else {
       // Parse the transport connection status
@@ -528,12 +559,12 @@ J * NotecardConnectionHandler::getNote(bool pop) /* const */{
   J * result;
 
   // Look for a Note in the NOTEFILE_SSL_INBOUND file
-  if (J * req = _notecard.newRequest("note.get")) {
+  if (J *req = _notecard.newRequest("note.get")) {
     JAddStringToObject(req, "file", NOTEFILE_SSL_INBOUND);
     if (pop) {
       JAddBoolToObject(req, "delete", true);
     }
-    J * note = _notecard.requestAndResponse(req);
+    J *note = _notecard.requestAndResponse(req);
     // Ensure the transaction doesn't return an error
     if (NoteResponseError(note)) {
       const char *jErr = JGetString(note, "err");
@@ -555,6 +586,32 @@ J * NotecardConnectionHandler::getNote(bool pop) /* const */{
     // Any other error indicates that we were unable to
     // retrieve a Note, therefore no Note is available.
     result = nullptr;
+  }
+
+  return result;
+}
+
+bool NotecardConnectionHandler::updateUidCache(void) {
+  String result;
+
+  // Read the Notecard UID from the Notehub configuration
+  if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("hub.get"))) {
+    // Check the response for errors
+    if (NoteResponseError(rsp)) {
+      const char *err = JGetString(rsp, "err");
+      Debug.print(DBG_ERROR, F("Failed to read Notecard UID"));
+      Debug.print(DBG_ERROR, F("Error: %s\n"), err);
+      result = false;
+    } else {
+      _notecard_uid = JGetString(rsp, "device");
+      _device_id = JGetString(rsp, "sn");
+      Debug.print(DBG_VERBOSE, F("Cached Notecard UID: <%s> and Arduino Device ID: <%s>\n"), _notecard_uid, _device_id);
+      result = true;
+    }
+    JDelete(rsp);
+  } else {
+    Debug.print(DBG_ERROR, F("Failed to read Notecard UID"));
+    result = false;
   }
 
   return result;
