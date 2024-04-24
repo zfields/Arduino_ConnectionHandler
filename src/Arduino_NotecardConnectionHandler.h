@@ -38,6 +38,13 @@
 class NotecardConnectionHandler final : public ConnectionHandler
 {
   public:
+    enum class TopicType : uint8_t {
+      Invalid = 0,
+      Device,
+      Shadow,
+      Thing
+    };
+
     typedef enum {
       NOTECARD_ERROR_NONE                 = 0,
       NOTECARD_ERROR_NO_DATA_AVAILABLE    = -1,
@@ -66,6 +73,22 @@ class NotecardConnectionHandler final : public ConnectionHandler
       const String & notehub_url = "-"
     );
 
+    // Accessors for Unique Hardware Identifiers
+    const String & getArduinoDeviceId(void) const {
+      return _device_id;
+    }
+    const String & getNotecardUid(void) const {
+      return _notecard_uid;
+    }
+
+    // Identify the target topic for R/W operations
+    TopicType getTopicType(void) const {
+      return _topic_type;
+    }
+    void setTopicType(TopicType topic) {
+      _topic_type = topic;
+    }
+
     // ConnectionHandler interface
     virtual unsigned long getTime() override;
     virtual int write(const uint8_t *buf, size_t size) override;
@@ -93,8 +116,10 @@ class NotecardConnectionHandler final : public ConnectionHandler
     uint32_t _inbound_buffer_index;
     uint32_t _inbound_buffer_size;
     bool _en_hw_int;
+    TopicType _topic_type;
     Notecard _notecard;
-    String _dev_uid;
+    String _device_id;
+    String _notecard_uid;
     String _notehub_url;
     String _project_uid;
 
@@ -103,6 +128,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
     bool configureConnection (bool connect) /* const */;
     uint_fast8_t connected (void) /* const */;
     J * getNote (bool pop = false) /* const */;
+    bool updateUidCache (void);
 };
 
 #endif /* #ifdef USE_NOTECARD */
