@@ -291,6 +291,33 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
     }
   }
 
+#if defined(BOARD_HAS_SECRET_KEY)
+  // Set environment variable template
+  if (NetworkConnectionState::INIT == result) {
+    if (J *req = NoteNewRequest("env.template")) {
+      if (J *body = JAddObjectToObject(req, "body")) {
+        JAddStringToObject(body, "arduino_iot_cloud_secret_key", TSTRING(64));
+        J *rsp = _notecard.requestAndResponse(req);
+
+        // Check the response for errors
+        if (NoteResponseError(rsp)) {
+          const char *err = JGetString(rsp, "err");
+          Debug.print(DBG_ERROR, F("%s\n"), err);
+          result = NetworkConnectionState::ERROR;
+        } else {
+          result = NetworkConnectionState::INIT;
+        }
+        JDelete(rsp);
+      } else {
+        JFree(req);
+        result = NetworkConnectionState::ERROR; // Assume the worst
+      }
+    } else {
+      result = NetworkConnectionState::ERROR; // Assume the worst
+    }
+  }
+#endif
+
   // Set inbound template to support LoRa/Satellite Notecard
   if (NetworkConnectionState::INIT == result) {
     if (J *req = _notecard.newRequest("note.template")) {
@@ -352,7 +379,7 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
     if (!updateUidCache()) {
       result = NetworkConnectionState::ERROR;
     } else {
-      Debug.print(DBG_INFO, F("Successfully configured Notecard with UID: %s"), _notecard_uid.c_str());
+      Debug.print(DBG_VERBOSE, F("Successfully configured Notecard with UID: %s"), _notecard_uid.c_str());
       if (_keep_alive) {
         _conn_start_ms = ::millis();
         Debug.print(DBG_INFO, F("Connecting to the network..."));
