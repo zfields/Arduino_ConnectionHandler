@@ -42,7 +42,8 @@ class NotecardConnectionHandler final : public ConnectionHandler
       Invalid = 0,
       Device,
       Shadow,
-      Thing
+      Thing,
+      Notehub = 255
     };
 
     typedef enum {
