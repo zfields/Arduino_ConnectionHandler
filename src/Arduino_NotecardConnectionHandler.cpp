@@ -164,7 +164,9 @@ int NotecardConnectionHandler::write(const uint8_t * buf, size_t size)
 
   if (J * req = _notecard.newRequest("note.add")) {
     JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
-    JAddBinaryToObject(req, "payload", buf, size);
+    if (buf) {
+      JAddBinaryToObject(req, "payload", buf, size);
+    }
     // Queue the Note when `_keep_alive` is disabled
     if (_keep_alive) {
       JAddBoolToObject(req, "sync", true);
@@ -230,19 +232,19 @@ bool NotecardConnectionHandler::available()
         if (J *body = JGetObject(note, "body")) {
           _topic_type = static_cast<TopicType>(JGetInt(body, "topic"));
           if (_topic_type == TopicType::Invalid) {
-            Debug.print(DBG_WARNING, F("Note does not contain a valid topic"));
+            Debug.print(DBG_WARNING, F("Note does not contain a topic"));
           } else {
             buffered_data = JGetBinaryFromObject(note, "payload", &_inbound_buffer, &_inbound_buffer_size);
             if (!buffered_data) {
               Debug.print(DBG_WARNING, F("Note does not contain payload data"));
             } else {
-              Debug.print(DBG_INFO, F("New payload buffered with size: %d"), _inbound_buffer_size);
+              Debug.print(DBG_DEBUG, F("New payload buffered with size: %d"), _inbound_buffer_size);
             }
           }
-          JDelete(note);
         } else {
           _topic_type = TopicType::Invalid;
         }
+        JDelete(note);
       }
     }
   }
@@ -379,10 +381,10 @@ NetworkConnectionState NotecardConnectionHandler::update_handleInit()
     if (!updateUidCache()) {
       result = NetworkConnectionState::ERROR;
     } else {
-      Debug.print(DBG_VERBOSE, F("Successfully configured Notecard with UID: %s"), _notecard_uid.c_str());
+      Debug.print(DBG_DEBUG, F("Successfully configured Notecard with UID: %s"), _notecard_uid.c_str());
       if (_keep_alive) {
         _conn_start_ms = ::millis();
-        Debug.print(DBG_INFO, F("Connecting to the network..."));
+        Debug.print(DBG_INFO, F("Starting network connection..."));
         result = NetworkConnectionState::CONNECTING;
       } else {
         result = NetworkConnectionState::DISCONNECTED;
@@ -494,7 +496,7 @@ bool NotecardConnectionHandler::armInterrupt(void) /* const */{
         // severe errors would occur in isolation. Once the Notecard firmware
         // is updated to support idempotent `rearm` requests, this error will
         // be handled as a failure.
-        Debug.print(DBG_VERBOSE, F("%s\n"), err);
+        Debug.print(DBG_VERBOSE, F("%s"), err);
         result = true;  // Ignore the error
         // Debug.print(DBG_ERROR, F("%s\n"), err);
         // result = false;
@@ -632,7 +634,7 @@ bool NotecardConnectionHandler::updateUidCache(void) {
     } else {
       _notecard_uid = JGetString(rsp, "device");
       _device_id = JGetString(rsp, "sn");
-      Debug.print(DBG_VERBOSE, F("Cached Notecard UID: <%s> and Arduino Device ID: <%s>\n"), _notecard_uid, _device_id);
+      Debug.print(DBG_DEBUG, F("Cached Notecard UID: <%s> and Arduino Device ID: <%s>"), _notecard_uid.c_str(), _device_id.c_str());
       result = true;
     }
     JDelete(rsp);
