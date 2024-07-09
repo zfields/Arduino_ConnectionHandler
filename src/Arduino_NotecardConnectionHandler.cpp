@@ -50,7 +50,7 @@
     Debug.print(DBG_DEBUG, F("[MEMORY][%s %s] Allocated: %d bytes"), (enter_ ? ">>>>" : "<<<<"), ctx_, mi.uordblks);
   }
 #endif
-#if defined(ARDUINO_SWAN_R5)
+#if defined(ARDUINO_SWAN_R5) || defined(ARDUINO_CYGNET)
   #define STLINK_DEBUG
   HardwareSerial stlinkSerial(PIN_VCP_RX, PIN_VCP_TX);
 #endif
