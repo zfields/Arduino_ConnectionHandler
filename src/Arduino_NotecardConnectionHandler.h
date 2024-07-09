@@ -40,8 +40,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
   public:
     enum class TopicType : uint8_t {
       Invalid = 0,
-      Device,
-      Shadow,
+      Command,
       Thing,
       Notehub = 255
     };
