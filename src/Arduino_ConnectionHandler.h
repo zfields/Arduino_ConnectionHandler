@@ -28,9 +28,7 @@
 
 #include <Arduino.h>
 
-#ifdef USE_NOTECARD
-  #include <Notecard.h>
-#else
+#ifndef USE_NOTECARD
 
 #ifdef ARDUINO_SAMD_MKR1000
   #include <WiFi101.h>

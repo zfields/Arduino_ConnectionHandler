@@ -74,9 +74,6 @@ class NotecardConnectionHandler final : public ConnectionHandler
     );
 
     // Accessors for Unique Hardware Identifiers
-    const String & getArduinoDeviceId(void) const {
-      return _device_id;
-    }
     const String & getNotecardUid(void) const {
       return _notecard_uid;
     }
@@ -89,11 +86,14 @@ class NotecardConnectionHandler final : public ConnectionHandler
       _topic_type = topic;
     }
 
+    const String & syncArduinoDeviceId (const String & device_id_);
+    int syncSecretDeviceKey (const String & secret_device_key_);
+
     // ConnectionHandler interface
-    virtual unsigned long getTime() override;
-    virtual int write(const uint8_t *buf, size_t size) override;
-    virtual int read() override;
     virtual bool available() override;
+    virtual unsigned long getTime() override;
+    virtual int read() override;
+    virtual int write(const uint8_t *buf, size_t size) override;
 
   protected:
 
@@ -124,10 +124,10 @@ class NotecardConnectionHandler final : public ConnectionHandler
     String _project_uid;
 
     // Private methods
-    bool armInterrupt (void) /* const */;
-    bool configureConnection (bool connect) /* const */;
-    uint_fast8_t connected (void) /* const */;
-    J * getNote (bool pop = false) /* const */;
+    bool armInterrupt (void) const ;
+    bool configureConnection (bool connect) const ;
+    uint_fast8_t connected (void) const ;
+    J * getNote (bool pop = false) const ;
     bool updateUidCache (void);
 };
 
