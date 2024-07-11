@@ -189,19 +189,8 @@ const String & NotecardConnectionHandler::syncArduinoDeviceId (const String & de
       }
     }
 
-    // Perform manual hub sync to ensure the Device ID is updated immediately
-    Debug.print(DBG_VERBOSE, F("Updating cloud..."));
-    if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("hub.sync"))) {
-      // Check the response for errors
-      if (NoteResponseError(rsp)) {
-        const char *err = JGetString(rsp, "err");
-        Debug.print(DBG_ERROR, F("%s"), err);
-      } else {
-        Debug.print(DBG_VERBOSE, F("Cloud updated successfully."));
-      }
-      JDelete(rsp);
-    } else {
-      Debug.print(DBG_ERROR, F("Failed to receive response from Notecard."));
+    if (_keep_alive && initiateNotehubSync()) {
+      Debug.print(DBG_ERROR, F("Failed to sync Arduino Device ID."));
     }
   }
 
@@ -225,7 +214,10 @@ int NotecardConnectionHandler::syncSecretDeviceKey (const String & secret_device
     if (secret_device_key_.length() > 0) {
       JAddStringToObject(req, "text", secret_device_key_.c_str());
     }
-    JAddBoolToObject(req, "sync", true);
+    // Queue the Note when `_keep_alive` is disabled
+    if (_keep_alive) {
+      JAddBoolToObject(req, "sync", true);
+    }
     if (J *rsp = _notecard.requestAndResponse(req)) {
       // Check the response for errors
       if (NoteResponseError(rsp)) {
@@ -331,14 +323,14 @@ int NotecardConnectionHandler::read()
   return result;
 }
 
-int NotecardConnectionHandler::write(const uint8_t * buf, size_t size)
+int NotecardConnectionHandler::write(const uint8_t * buf_, size_t size_)
 {
   int result;
 
   if (J * req = _notecard.newRequest("note.add")) {
     JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
-    if (buf) {
-      JAddBinaryToObject(req, "payload", buf, size);
+    if (buf_) {
+      JAddBinaryToObject(req, "payload", buf_, size_);
     }
     // Queue the Note when `_keep_alive` is disabled
     if (_keep_alive) {
@@ -564,6 +556,9 @@ NetworkConnectionState NotecardConnectionHandler::update_handleConnecting()
   } else {
     Debug.print(DBG_INFO, F("Connected to Notehub!"));
     result = NetworkConnectionState::CONNECTED;
+    if (initiateNotehubSync()) {
+      Debug.print(DBG_ERROR, F("Failed to initiate Notehub sync."));
+    }
   }
 
 #if defined(LOG_MEMORY_USAGE)
@@ -646,7 +641,8 @@ NetworkConnectionState NotecardConnectionHandler::update_handleDisconnected()
    PRIVATE MEMBER FUNCTIONS
  ******************************************************************************/
 
-bool NotecardConnectionHandler::armInterrupt (void) const {
+bool NotecardConnectionHandler::armInterrupt (void) const
+{
   bool result;
 #if defined(LOG_MEMORY_USAGE)
   logMemoryUsage(__FUNCTION__, true);
@@ -693,7 +689,8 @@ bool NotecardConnectionHandler::armInterrupt (void) const {
   return result;
 }
 
-bool NotecardConnectionHandler::configureConnection (bool connect) const {
+bool NotecardConnectionHandler::configureConnection (bool connect_) const
+{
   bool result;
 #if defined(LOG_MEMORY_USAGE)
   logMemoryUsage(__FUNCTION__, true);
@@ -702,7 +699,7 @@ bool NotecardConnectionHandler::configureConnection (bool connect) const {
   if (J *req = _notecard.newRequest("hub.set")) {
     JAddStringToObject(req, "host", _notehub_url.c_str());
     JAddStringToObject(req, "product", _project_uid.c_str());
-    if (connect) {
+    if (connect_) {
       JAddStringToObject(req, "mode", "continuous");
       JAddIntToObject(req, "inbound", 15);  // Unnecessary fail safe value
       JAddBoolToObject(req, "sync", true);
@@ -738,7 +735,8 @@ bool NotecardConnectionHandler::configureConnection (bool connect) const {
   return result;
 }
 
-uint_fast8_t NotecardConnectionHandler::connected (void) const {
+uint_fast8_t NotecardConnectionHandler::connected (void) const
+{
   NotecardConnectionStatus result;
 #if defined(LOG_MEMORY_USAGE)
   logMemoryUsage(__FUNCTION__, true);
@@ -779,7 +777,8 @@ uint_fast8_t NotecardConnectionHandler::connected (void) const {
   return result;
 }
 
-J * NotecardConnectionHandler::getNote (bool pop) const {
+J * NotecardConnectionHandler::getNote (bool pop_) const
+{
   J * result;
 #if defined(LOG_MEMORY_USAGE)
   logMemoryUsage(__FUNCTION__, true);
@@ -788,7 +787,7 @@ J * NotecardConnectionHandler::getNote (bool pop) const {
   // Look for a Note in the NOTEFILE_SSL_INBOUND file
   if (J *req = _notecard.newRequest("note.get")) {
     JAddStringToObject(req, "file", NOTEFILE_SSL_INBOUND);
-    if (pop) {
+    if (pop_) {
       JAddBoolToObject(req, "delete", true);
     }
     if (J *note = _notecard.requestAndResponse(req)) {
@@ -827,7 +826,69 @@ J * NotecardConnectionHandler::getNote (bool pop) const {
   return result;
 }
 
-bool NotecardConnectionHandler::updateUidCache (void) {
+int NotecardConnectionHandler::initiateNotehubSync (void) const
+{
+  int result;
+  Debug.print(DBG_DEBUG, F("Initiating Notehub sync..."));
+  if (J *rsp = _notecard.requestAndResponse(_notecard.newRequest("hub.sync"))) {
+    // Check the response for errors
+    if (NoteResponseError(rsp)) {
+      const char *err = JGetString(rsp, "err");
+      Debug.print(DBG_ERROR, F("%s"), err);\
+      result = NotecardCommunicationError::NOTECARD_ERROR_GENERIC;
+    } else {
+      Debug.print(DBG_VERBOSE, F("Notehub sync successfully initiated."));
+      result = NotecardCommunicationError::NOTECARD_ERROR_NONE;
+    }
+    JDelete(rsp);
+  } else {
+    Debug.print(DBG_ERROR, F("Failed to receive response from Notecard."));
+    result = NotecardCommunicationError::NOTECARD_ERROR_GENERIC;
+  }
+
+  return result;
+}
+
+int NotecardConnectionHandler::notehubLogging (bool enable_) const
+{
+  int result;
+
+  if (J * req = _notecard.newRequest("note.add")) {
+    JAddStringToObject(req, "file", NOTEFILE_SSL_OUTBOUND);
+    if (enable_) {
+      JAddBinaryToObject(req, "payload", "1", sizeof("1"));
+    } else {
+      JAddBinaryToObject(req, "payload", "0", sizeof("0"));
+    }
+    // Queue the Note when `_keep_alive` is disabled
+    if (_keep_alive) {
+      JAddBoolToObject(req, "sync", true);
+    }
+    if (J *body = JAddObjectToObject(req, "body")) {
+      JAddIntToObject(body, "topic", static_cast<int>(TopicType::Notehub));
+      J * rsp = _notecard.requestAndResponse(req);
+      if (NoteResponseError(rsp)) {
+        const char *err = JGetString(rsp, "err");
+        Debug.print(DBG_ERROR, F("%s\n"), err);
+        result = NotecardCommunicationError::NOTECARD_ERROR_GENERIC;
+      } else {
+        result = NotecardCommunicationError::NOTECARD_ERROR_NONE;
+        Debug.print(DBG_INFO, F("Message sent correctly!"));
+      }
+      JDelete(rsp);
+    } else {
+      JFree(req);
+      result = NotecardCommunicationError::HOST_ERROR_OUT_OF_MEMORY;
+    }
+  } else {
+    result = NotecardCommunicationError::HOST_ERROR_OUT_OF_MEMORY;
+  }
+
+  return result;
+}
+
+bool NotecardConnectionHandler::updateUidCache (void)
+{
   bool result;
 #if defined(LOG_MEMORY_USAGE)
   logMemoryUsage(__FUNCTION__, true);

@@ -73,6 +73,18 @@ class NotecardConnectionHandler final : public ConnectionHandler
       const String & notehub_url = "-"
     );
 
+    // Notehub Logging
+    inline int disableNotehubLogging (void) const
+    {
+      Debug.print(DBG_INFO, F("Disabling Notehub logging..."));
+      return notehubLogging(false);
+    }
+    inline int enableNotehubLogging (void) const
+    {
+      Debug.print(DBG_INFO, F("Enabling Notehub logging..."));
+      return notehubLogging(true);
+    }
+
     // Accessors for Unique Hardware Identifiers
     const String & getNotecardUid(void) const {
       return _notecard_uid;
@@ -86,8 +98,8 @@ class NotecardConnectionHandler final : public ConnectionHandler
       _topic_type = topic;
     }
 
-    const String & syncArduinoDeviceId (const String & device_id_);
-    int syncSecretDeviceKey (const String & secret_device_key_);
+    const String & syncArduinoDeviceId (const String & device_id);
+    int syncSecretDeviceKey (const String & secret_device_key);
 
     // ConnectionHandler interface
     virtual bool available() override;
@@ -124,10 +136,12 @@ class NotecardConnectionHandler final : public ConnectionHandler
     String _project_uid;
 
     // Private methods
-    bool armInterrupt (void) const ;
-    bool configureConnection (bool connect) const ;
-    uint_fast8_t connected (void) const ;
-    J * getNote (bool pop = false) const ;
+    bool armInterrupt (void) const;
+    bool configureConnection (bool connect) const;
+    uint_fast8_t connected (void) const;
+    J * getNote (bool pop = false) const;
+    int initiateNotehubSync (void) const;
+    int notehubLogging (bool enable) const;
     bool updateUidCache (void);
 };
 
