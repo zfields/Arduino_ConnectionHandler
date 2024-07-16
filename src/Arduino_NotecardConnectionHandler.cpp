@@ -334,6 +334,7 @@ int NotecardConnectionHandler::write(const uint8_t * buf_, size_t size_)
     }
     // Queue the Note when `_keep_alive` is disabled
     if (_keep_alive) {
+      JAddBoolToObject(req, "live", true);
       JAddBoolToObject(req, "sync", true);
     }
     if (J *body = JAddObjectToObject(req, "body")) {
@@ -862,6 +863,7 @@ int NotecardConnectionHandler::notehubLogging (bool enable_) const
     }
     // Queue the Note when `_keep_alive` is disabled
     if (_keep_alive) {
+      JAddBoolToObject(req, "live", true);
       JAddBoolToObject(req, "sync", true);
     }
     if (J *body = JAddObjectToObject(req, "body")) {
