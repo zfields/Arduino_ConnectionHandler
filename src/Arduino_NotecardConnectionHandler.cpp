@@ -90,58 +90,58 @@ static_assert(sizeof(NotecardConnectionStatus) == sizeof(uint_fast8_t));
  ******************************************************************************/
 
 NotecardConnectionHandler::NotecardConnectionHandler(
-  const String & project_uid,
-  bool en_hw_int,
-  bool keep_alive,
-  uint32_t i2c_address,
-  uint32_t i2c_max,
-  TwoWire & wire,
-  const String & notehub_url
+  const String & project_uid_,
+  bool en_hw_int_,
+  bool keep_alive_,
+  uint32_t i2c_address_,
+  uint32_t i2c_max_,
+  TwoWire & wire_,
+  const String & notehub_url_
 ) :
-  ConnectionHandler{keep_alive, NetworkAdapter::NOTECARD},
+  ConnectionHandler{keep_alive_, NetworkAdapter::NOTECARD},
   _serial(nullptr),
-  _wire(&wire),
+  _wire(&wire_),
   _inbound_buffer(nullptr),
   _conn_start_ms(0),
-  _i2c_address(i2c_address),
-  _i2c_max(i2c_max),
+  _i2c_address(i2c_address_),
+  _i2c_max(i2c_max_),
   _uart_speed(0),
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
-  _en_hw_int(en_hw_int),
+  _en_hw_int(en_hw_int_),
   _topic_type{TopicType::Invalid},
   _notecard{},
   _device_id{},
   _notecard_uid{},
-  _notehub_url(notehub_url),
-  _project_uid(project_uid)
+  _notehub_url(notehub_url_),
+  _project_uid(project_uid_)
 { }
 
 NotecardConnectionHandler::NotecardConnectionHandler(
-  const String & project_uid,
-  HardwareSerial & serial,
-  uint32_t speed,
-  bool en_hw_int,
-  bool keep_alive,
-  const String & notehub_url
+  const String & project_uid_,
+  HardwareSerial & serial_,
+  uint32_t speed_,
+  bool en_hw_int_,
+  bool keep_alive_,
+  const String & notehub_url_
 ) :
-  ConnectionHandler{keep_alive, NetworkAdapter::NOTECARD},
-  _serial(&serial),
+  ConnectionHandler{keep_alive_, NetworkAdapter::NOTECARD},
+  _serial(&serial_),
   _wire(nullptr),
   _inbound_buffer(nullptr),
   _conn_start_ms(0),
   _i2c_address(0),
   _i2c_max(0),
-  _uart_speed(speed),
+  _uart_speed(speed_),
   _inbound_buffer_index(0),
   _inbound_buffer_size(0),
-  _en_hw_int(en_hw_int),
+  _en_hw_int(en_hw_int_),
   _topic_type{TopicType::Invalid},
   _notecard{},
   _device_id{},
   _notecard_uid{},
-  _notehub_url(notehub_url),
-  _project_uid(project_uid)
+  _notehub_url(notehub_url_),
+  _project_uid(project_uid_)
 { }
 
 /******************************************************************************
@@ -290,7 +290,7 @@ bool NotecardConnectionHandler::available()
   return buffered_data;
 }
 
-unsigned long NotecardConnectionHandler::getTime(void)
+unsigned long NotecardConnectionHandler::getTime()
 {
   unsigned long result;
 
@@ -698,8 +698,17 @@ bool NotecardConnectionHandler::configureConnection (bool connect_) const
 #endif
 
   if (J *req = _notecard.newRequest("hub.set")) {
-    JAddStringToObject(req, "host", _notehub_url.c_str());
-    JAddStringToObject(req, "product", _project_uid.c_str());
+    // Only update the host if it is not empty
+    if (_notehub_url.length() > 0) {
+      JAddStringToObject(req, "host", _notehub_url.c_str());
+    }
+
+    // Only update the product if it is not empty or the default value
+    if (_project_uid.length() > 0 && _project_uid != "com.domain.you:product") {
+      JAddStringToObject(req, "product", _project_uid.c_str());
+    }
+
+    // Configure the connection mode based on the `connect_` parameter
     if (connect_) {
       JAddStringToObject(req, "mode", "continuous");
       JAddIntToObject(req, "inbound", 15);  // Unnecessary fail safe value
@@ -711,6 +720,8 @@ bool NotecardConnectionHandler::configureConnection (bool connect_) const
       JAddStringToObject(req, "vinbound", "-");
       JAddStringToObject(req, "voutbound", "-");
     }
+
+    // Send the request to the Notecard
     if (J *rsp = _notecard.requestAndResponseWithRetry(req, 30)) {
       // Check the response for errors
       if (NoteResponseError(rsp)) {

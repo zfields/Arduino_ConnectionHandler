@@ -61,7 +61,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
       uint32_t i2c_address = NOTE_I2C_ADDR_DEFAULT,
       uint32_t i2c_max = NOTE_I2C_MAX_DEFAULT,
       TwoWire & wire = Wire,
-      const String & notehub_url = "-"
+      const String & notehub_url = ""
     );
 
     NotecardConnectionHandler(
@@ -70,7 +70,7 @@ class NotecardConnectionHandler final : public ConnectionHandler
       uint32_t speed = 9600,
       bool en_hw_int = false,
       bool keep_alive = true,
-      const String & notehub_url = "-"
+      const String & notehub_url = ""
     );
 
     // Notehub Logging
