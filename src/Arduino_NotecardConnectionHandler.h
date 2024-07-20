@@ -24,12 +24,12 @@
    INCLUDE
  ******************************************************************************/
 
+#if defined(USE_NOTECARD) /* Only compile if the Notecard is present */
+
 #include <stdint.h>
 #include <Notecard.h>
 
 #include "Arduino_ConnectionHandler.h"
-
-#if defined(USE_NOTECARD) /* Only compile if the Notecard is present */
 
 /******************************************************************************
    CLASS DECLARATION
