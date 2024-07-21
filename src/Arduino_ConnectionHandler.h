@@ -29,6 +29,10 @@
 #include <Arduino.h>
 #include "Arduino_ConnectionHandlerDefinitions.h"
 
+#if defined(USE_NOTECARD)
+  #include "Arduino_NotecardConnectionHandler.h"
+#else
+
 #if defined(BOARD_HAS_WIFI)
   #include "Arduino_WiFiConnectionHandler.h"
 #endif
@@ -56,5 +60,7 @@
 #if defined(BOARD_HAS_CELLULAR)
   #include "Arduino_CellularConnectionHandler.h"
 #endif
+
+#endif // USE_NOTECARD
 
 #endif /* CONNECTION_HANDLER_H_ */
